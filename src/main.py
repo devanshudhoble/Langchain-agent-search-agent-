@@ -5,8 +5,7 @@ from pathlib import Path
 import yaml
 import streamlit as st
 
-# Setup event loop for the thread (Streamlit script runner threads do not have one by default)
-# This prevents grpc/asyncio RuntimeError about missing event loop
+# Setup event loop for the thread
 try:
     asyncio.get_event_loop()
 except RuntimeError:
@@ -21,27 +20,24 @@ from src.utils import load_env
 load_env()
 
 from src.agent import SearchAgent
-from src.docs_loader import load_documents
-from src.vector_store import get_faiss_index
 
 # Load configuration
 config_path = Path(__file__).parent.parent / "config.yaml"
 with open(config_path, "r") as f:
     cfg = yaml.safe_load(f)
 
-# Set Streamlit Page Configuration with B&W / dark theme preference
+# Set Streamlit Page Configuration
 st.set_page_config(
-    page_title="Gemini Search Agent",
-    page_icon="🔍",
+    page_title="LangChain Web Search Agent",
+    page_icon="🤖",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
 
-# Dark Black-and-White Custom styling
+# Dark B&W Custom styling
 st.markdown(
     """
     <style>
-    /* Professional Black-and-White / Minimalist Theme overrides */
     .stApp {
         background-color: #0c0c0c;
         color: #f5f5f5;
@@ -74,7 +70,6 @@ st.markdown(
         background-color: #1e1e1e;
         border: 1px solid #333333;
     }
-    /* Custom separator line */
     hr {
         border-color: #222222 !important;
     }
@@ -83,30 +78,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("LangChain Gemini Search Agent")
-st.caption("Powered by Google Gemini and FAISS Vector Store")
+st.title("LangChain Web Search Agent")
+st.caption("Powered by Google Gemini & DuckDuckGo Search")
 st.markdown("---")
-
-# Make sure data directory exists
-data_dir = Path(cfg["loader"]["source_path"])
-if not data_dir.exists():
-    data_dir.mkdir(parents=True, exist_ok=True)
-
-# Load documents and create/fetch vector store
-if "vector_store" not in st.session_state:
-    docs = load_documents(str(data_dir), cfg["loader"]["allowed_extensions"])
-    if not docs:
-        st.warning("No documents found in the `data/` directory. Please place PDF, TXT, or MD files there.")
-        st.stop()
-    vector_store = get_faiss_index(docs, index_path=cfg["vector_store"]["index_path"])
-    st.session_state.vector_store = vector_store
-else:
-    vector_store = st.session_state.vector_store
 
 # Initialize the agent
 if "agent" not in st.session_state:
-    agent = SearchAgent(vector_store=vector_store, llm_cfg=cfg["llm"])
-    st.session_state.agent = agent
+    try:
+        agent = SearchAgent(llm_cfg=cfg["llm"])
+        st.session_state.agent = agent
+    except Exception as e:
+        st.error(f"Failed to initialize Agent: {e}")
+        st.stop()
 else:
     agent = st.session_state.agent
 
@@ -121,15 +104,17 @@ for user_msg, bot_msg in st.session_state.chat_history:
     with st.chat_message("assistant"):
         st.markdown(bot_msg)
 
-user_input = st.chat_input("Ask a question about your documents")
+user_input = st.chat_input("Ask me anything (I can search the web in real-time!)")
 if user_input:
     # Display user's input immediately
     with st.chat_message("user"):
         st.markdown(user_input)
     
     with st.chat_message("assistant"):
-        with st.spinner("Analyzing documents & generating response..."):
-            answer = agent.run(user_input)
-            st.markdown(answer)
-            
-    st.session_state.chat_history.append((user_input, answer))
+        with st.spinner("Agent searching the web & reasoning..."):
+            try:
+                answer = agent.run(user_input)
+                st.markdown(answer)
+                st.session_state.chat_history.append((user_input, answer))
+            except Exception as e:
+                st.error(f"An error occurred: {e}")

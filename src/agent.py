@@ -1,34 +1,24 @@
 import os
 from typing import List
 
-from langchain.chains import ConversationalRetrievalChain
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_community.tools.ddg_search.tool import DuckDuckGoSearchRun
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.schema import Document
-from langchain.prompts import PromptTemplate
-
-from src.prompt_templates import SYSTEM_PROMPT, HUMAN_PROMPT
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.chat_history import InMemoryChatMessageHistory
 
 
 class SearchAgent:
     """
-    LangChain search agent that:
-    1. Uses a Gemini LLM (ChatGoogleGenerativeAI).
-    2. Retrieves relevant passages from a FAISS vector store.
-    3. Returns a natural-language answer.
+    AI Search Agent powered by Google Gemini and LangChain.
+    Equipped with a DuckDuckGo web search tool to answer questions in real-time.
     """
-
-    def __init__(self, vector_store, llm_cfg: dict):
-        """
-        Args:
-            vector_store: FAISS instance (already built or loaded).
-            llm_cfg: Dictionary from config.yaml with keys `provider`,
-                     `model` and `api_key`.
-        """
+    def __init__(self, llm_cfg: dict):
         api_key = llm_cfg.get("api_key") or os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("Gemini API key not found. Set env GEMINI_API_KEY.")
 
-        # Initialize the Gemini chat model with REST transport to avoid event loop issues in Streamlit threads
+        # Initialize the chat model with REST transport for robustness
         self.llm = ChatGoogleGenerativeAI(
             model=llm_cfg.get("model", "gemini-1.5-flash"),
             temperature=0.0,
@@ -36,26 +26,45 @@ class SearchAgent:
             transport="rest"
         )
 
-        # Build the retrieval chain
-        # Using ConversationalRetrievalChain from langchain
-        self.chain = ConversationalRetrievalChain.from_llm(
-            llm=self.llm,
-            retriever=vector_store.as_retriever(search_kwargs={"k": 4}),
-            combine_docs_chain_kwargs={
-                "prompt": PromptTemplate(
-                    template=HUMAN_PROMPT,
-                    input_variables=["context", "question"]
-                )
-            },
-            return_source_documents=True,
+        # Initialize web search tool
+        self.search_tool = DuckDuckGoSearchRun()
+        self.tools = [self.search_tool]
+
+        # Define prompt template for the agent
+        self.prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a helpful, smart AI search assistant. Use the web search tool to find accurate, real-time information when asked about news, events, or facts. Provide concise and informative answers."),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ])
+
+        # Create the tool-calling agent
+        self.agent = create_tool_calling_agent(self.llm, self.tools, self.prompt)
+
+        # Create the AgentExecutor
+        self.executor = AgentExecutor(
+            agent=self.agent,
+            tools=self.tools,
+            verbose=True,
+            handle_parsing_errors=True
         )
 
-        # Simple chat history for the chain (list of (human, ai) tuples)
-        self.chat_history: List[tuple] = []
+        # In-memory history for conversation state
+        self.chat_history = InMemoryChatMessageHistory()
 
     def run(self, query: str) -> str:
-        """Run a single query and return the LLM answer."""
-        result = self.chain({"question": query, "chat_history": self.chat_history})
-        # Update chat history for next turn
-        self.chat_history.append((query, result["answer"]))
-        return result["answer"]
+        """Run the agent with conversation memory."""
+        # Convert history messages to a list
+        history_msgs = self.chat_history.messages
+        
+        # Invoke executor
+        result = self.executor.invoke({
+            "input": query,
+            "chat_history": history_msgs
+        })
+        
+        # Add messages to history
+        self.chat_history.add_user_message(query)
+        self.chat_history.add_ai_message(result["output"])
+        
+        return result["output"]

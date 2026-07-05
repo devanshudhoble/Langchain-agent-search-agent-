@@ -1,7 +1,0 @@
-LangChain Search Agent Project
-This project is an advanced agentic search system built using the LangChain framework and Google Gemini.
-It indexes local documents such as PDF, TXT, and Markdown files using FAISS (Facebook AI Similarity Search) and generates answers using Gemini.
-The user interface is built with Streamlit and features a professional dark/black-and-white theme.
-It can be run locally, packaged in a Docker container, or deployed to hosting platforms like Render.
-The API key is configured using a local environment file (.env) and loaded securely using python-dotenv.
-This project is perfect for resumes and showcases skills in LangChain, Vector Stores, LLM integration, Docker, and UI development.
