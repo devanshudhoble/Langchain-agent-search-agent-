@@ -1,0 +1,16 @@
+llm:
+  provider: gemini
+  model: gemini-1.5-flash
+  api_key: YOUR_GEMINI_API_KEY
+
+vector_store:
+  type: faiss
+  index_path: ./index/faiss_index
+
+loader:
+  source_path: ./data
+  allowed_extensions: [pdf, txt, md]
+
+ui:
+  mode: streamlit
+  theme: dark  # black and white theme
