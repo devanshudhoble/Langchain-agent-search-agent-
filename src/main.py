@@ -1,8 +1,17 @@
+import asyncio
 import os
 import sys
 from pathlib import Path
 import yaml
 import streamlit as st
+
+# Setup event loop for the thread (Streamlit script runner threads do not have one by default)
+# This prevents grpc/asyncio RuntimeError about missing event loop
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
 # Make sure src is in python path
 sys.path.append(str(Path(__file__).parent.parent))

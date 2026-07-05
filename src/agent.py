@@ -28,11 +28,12 @@ class SearchAgent:
         if not api_key:
             raise ValueError("Gemini API key not found. Set env GEMINI_API_KEY.")
 
-        # Initialize the Gemini chat model
+        # Initialize the Gemini chat model with REST transport to avoid event loop issues in Streamlit threads
         self.llm = ChatGoogleGenerativeAI(
             model=llm_cfg.get("model", "gemini-1.5-flash"),
             temperature=0.0,
             google_api_key=api_key,
+            transport="rest"
         )
 
         # Build the retrieval chain
