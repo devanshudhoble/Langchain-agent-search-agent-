@@ -14,7 +14,10 @@ class SearchAgent:
     Equipped with a DuckDuckGo web search tool to answer questions in real-time.
     """
     def __init__(self, llm_cfg: dict):
-        api_key = llm_cfg.get("api_key") or os.getenv("GEMINI_API_KEY")
+        api_key = llm_cfg.get("api_key")
+        if not api_key or api_key == "YOUR_GEMINI_API_KEY":
+            api_key = os.getenv("GEMINI_API_KEY")
+            
         if not api_key:
             raise ValueError("Gemini API key not found. Set env GEMINI_API_KEY.")
 
